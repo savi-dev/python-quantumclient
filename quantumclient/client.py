@@ -173,7 +173,7 @@ class HTTPClient(httplib2.Http):
             raise exceptions.Unauthorized()
         self.endpoint_url = self.service_catalog.url_for(
             attr='region', filter_value=self.region_name,
-            endpoint_type='adminURL')
+            endpoint_type='publicURL')
 
     def authenticate(self):
         if self.auth_strategy != 'keystone':
