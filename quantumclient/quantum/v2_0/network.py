@@ -18,37 +18,93 @@
 import argparse
 import logging
 
-from quantumclient.quantum.v2_0 import CreateCommand
-from quantumclient.quantum.v2_0 import DeleteCommand
-from quantumclient.quantum.v2_0 import ListCommand
-from quantumclient.quantum.v2_0 import UpdateCommand
-from quantumclient.quantum.v2_0 import ShowCommand
+from quantumclient.common import exceptions
+from quantumclient.quantum import v2_0 as quantumv20
 
 
 def _format_subnets(network):
     try:
-        return '\n'.join(network['subnets'])
+        return '\n'.join([' '.join([s['id'], s.get('cidr', '')])
+                          for s in network['subnets']])
     except Exception:
         return ''
 
 
-class ListNetwork(ListCommand):
+class ListNetwork(quantumv20.ListCommand):
     """List networks that belong to a given tenant."""
 
+    # Length of a query filter on subnet id
+    # id=<uuid>& (with len(uuid)=36)
+    subnet_id_filter_len = 40
     resource = 'network'
     log = logging.getLogger(__name__ + '.ListNetwork')
     _formatters = {'subnets': _format_subnets, }
     list_columns = ['id', 'name', 'subnets']
+    pagination_support = True
+    sorting_support = True
+
+    def extend_list(self, data, parsed_args):
+        """Add subnet information to a network list."""
+        quantum_client = self.get_client()
+        search_opts = {'fields': ['id', 'cidr']}
+        if self.pagination_support:
+            page_size = parsed_args.page_size
+            if page_size:
+                search_opts.update({'limit': page_size})
+        subnet_ids = []
+        for n in data:
+            if 'subnets' in n:
+                subnet_ids.extend(n['subnets'])
+
+        def _get_subnet_list(sub_ids):
+            search_opts['id'] = sub_ids
+            return quantum_client.list_subnets(
+                **search_opts).get('subnets', [])
+
+        try:
+            subnets = _get_subnet_list(subnet_ids)
+        except exceptions.RequestURITooLong as uri_len_exc:
+            # The URI is too long because of too many subnet_id filters
+            # Use the excess attribute of the exception to know how many
+            # subnet_id filters can be inserted into a single request
+            subnet_count = len(subnet_ids)
+            max_size = ((self.subnet_id_filter_len * subnet_count) -
+                        uri_len_exc.excess)
+            chunk_size = max_size / self.subnet_id_filter_len
+            subnets = []
+            for i in xrange(0, subnet_count, chunk_size):
+                subnets.extend(
+                    _get_subnet_list(subnet_ids[i: i + chunk_size]))
+
+        subnet_dict = dict([(s['id'], s) for s in subnets])
+        for n in data:
+            if 'subnets' in n:
+                n['subnets'] = [(subnet_dict.get(s) or {"id": s})
+                                for s in n['subnets']]
 
 
-class ShowNetwork(ShowCommand):
+class ListExternalNetwork(ListNetwork):
+    """List external networks that belong to a given tenant."""
+
+    log = logging.getLogger(__name__ + '.ListExternalNetwork')
+    pagination_support = True
+    sorting_support = True
+
+    def retrieve_list(self, parsed_args):
+        external = '--router:external=True'
+        if external not in self.values_specs:
+            self.values_specs.append('--router:external=True')
+        return super(ListExternalNetwork, self).retrieve_list(parsed_args)
+
+
+class ShowNetwork(quantumv20.ShowCommand):
     """Show information of a given network."""
 
     resource = 'network'
     log = logging.getLogger(__name__ + '.ShowNetwork')
 
 
-class CreateNetwork(CreateCommand):
+class CreateNetwork(quantumv20.CreateCommand):
     """Create a network for a given tenant."""
 
     resource = 'network'
@@ -57,40 +113,39 @@ class CreateNetwork(CreateCommand):
     def add_known_arguments(self, parser):
         parser.add_argument(
             '--admin-state-down',
-            default=True, action='store_false',
+            dest='admin_state', action='store_false',
             help='Set Admin State Up to false')
         parser.add_argument(
             '--admin_state_down',
-            action='store_false',
+            dest='admin_state', action='store_false',
             help=argparse.SUPPRESS)
         parser.add_argument(
             '--shared',
             action='store_true',
-            default=argparse.SUPPRESS,
             help='Set the network as shared')
         parser.add_argument(
-            'name', metavar='name',
+            'name', metavar='NAME',
             help='Name of network to create')
 
     def args2body(self, parsed_args):
         body = {'network': {
             'name': parsed_args.name,
-            'admin_state_up': parsed_args.admin_state_down}, }
+            'admin_state_up': parsed_args.admin_state}, }
         if parsed_args.tenant_id:
             body['network'].update({'tenant_id': parsed_args.tenant_id})
-        if hasattr(parsed_args, 'shared'):
+        if parsed_args.shared:
             body['network'].update({'shared': parsed_args.shared})
         return body
 
 
-class DeleteNetwork(DeleteCommand):
+class DeleteNetwork(quantumv20.DeleteCommand):
     """Delete a given network."""
 
     log = logging.getLogger(__name__ + '.DeleteNetwork')
     resource = 'network'
 
 
-class UpdateNetwork(UpdateCommand):
+class UpdateNetwork(quantumv20.UpdateCommand):
     """Update network's information."""
 
     log = logging.getLogger(__name__ + '.UpdateNetwork')

@@ -21,11 +21,6 @@ import logging
 from quantumclient.common import exceptions
 from quantumclient.common import utils
 from quantumclient.quantum import v2_0 as quantumv20
-from quantumclient.quantum.v2_0 import CreateCommand
-from quantumclient.quantum.v2_0 import DeleteCommand
-from quantumclient.quantum.v2_0 import ListCommand
-from quantumclient.quantum.v2_0 import ShowCommand
-from quantumclient.quantum.v2_0 import UpdateCommand
 
 
 def _format_allocation_pools(subnet):
@@ -52,7 +47,7 @@ def _format_host_routes(subnet):
         return ''
 
 
-class ListSubnet(ListCommand):
+class ListSubnet(quantumv20.ListCommand):
     """List networks that belong to a given tenant."""
 
     resource = 'subnet'
@@ -61,16 +56,18 @@ class ListSubnet(ListCommand):
                    'dns_nameservers': _format_dns_nameservers,
                    'host_routes': _format_host_routes, }
     list_columns = ['id', 'name', 'cidr', 'allocation_pools']
+    pagination_support = True
+    sorting_support = True
 
 
-class ShowSubnet(ShowCommand):
+class ShowSubnet(quantumv20.ShowCommand):
     """Show information of a given subnet."""
 
     resource = 'subnet'
     log = logging.getLogger(__name__ + '.ShowSubnet')
 
 
-class CreateSubnet(CreateCommand):
+class CreateSubnet(quantumv20.CreateCommand):
     """Create a subnet for a given tenant."""
 
     resource = 'subnet'
@@ -91,27 +88,39 @@ class CreateSubnet(CreateCommand):
             choices=[4, 6],
             help=argparse.SUPPRESS)
         parser.add_argument(
-            '--gateway', metavar='gateway',
+            '--gateway', metavar='GATEWAY_IP',
             help='gateway ip of this subnet')
         parser.add_argument(
             '--no-gateway',
-            default=False, action='store_true',
+            action='store_true',
             help='No distribution of gateway')
         parser.add_argument(
-            '--allocation-pool',
-            action='append',
-            help='Allocation pool IP addresses for this subnet: '
-            'start=<ip_address>,end=<ip_address> '
-            'can be repeated')
+            '--allocation-pool', metavar='start=IP_ADDR,end=IP_ADDR',
+            action='append', dest='allocation_pools', type=utils.str2dict,
+            help='Allocation pool IP addresses for this subnet '
+            '(This option can be repeated)')
         parser.add_argument(
             '--allocation_pool',
-            action='append',
+            action='append', dest='allocation_pools', type=utils.str2dict,
             help=argparse.SUPPRESS)
         parser.add_argument(
-            'network_id', metavar='network',
-            help='Network id or name this subnet belongs to')
+            '--host-route', metavar='destination=CIDR,nexthop=IP_ADDR',
+            action='append', dest='host_routes', type=utils.str2dict,
+            help='Additional route (This option can be repeated)')
         parser.add_argument(
-            'cidr', metavar='cidr',
+            '--dns-nameserver', metavar='DNS_NAMESERVER',
+            action='append', dest='dns_nameservers',
+            help='DNS name server for this subnet '
+            '(This option can be repeated)')
+        parser.add_argument(
+            '--disable-dhcp',
+            action='store_true',
+            help='Disable DHCP for this subnet')
+        parser.add_argument(
+            'network_id', metavar='NETWORK',
+            help='network id or name this subnet belongs to')
+        parser.add_argument(
+            'cidr', metavar='CIDR',
             help='cidr of subnet to create')
 
     def args2body(self, parsed_args):
@@ -133,24 +142,26 @@ class CreateSubnet(CreateCommand):
             body['subnet'].update({'tenant_id': parsed_args.tenant_id})
         if parsed_args.name:
             body['subnet'].update({'name': parsed_args.name})
-        ips = []
-        if parsed_args.allocation_pool:
-            for ip_spec in parsed_args.allocation_pool:
-                ips.append(utils.str2dict(ip_spec))
-        if ips:
-            body['subnet'].update({'allocation_pools': ips})
+        if parsed_args.disable_dhcp:
+            body['subnet'].update({'enable_dhcp': False})
+        if parsed_args.allocation_pools:
+            body['subnet']['allocation_pools'] = parsed_args.allocation_pools
+        if parsed_args.host_routes:
+            body['subnet']['host_routes'] = parsed_args.host_routes
+        if parsed_args.dns_nameservers:
+            body['subnet']['dns_nameservers'] = parsed_args.dns_nameservers
 
         return body
 
 
-class DeleteSubnet(DeleteCommand):
+class DeleteSubnet(quantumv20.DeleteCommand):
     """Delete a given subnet."""
 
     resource = 'subnet'
     log = logging.getLogger(__name__ + '.DeleteSubnet')
 
 
-class UpdateSubnet(UpdateCommand):
+class UpdateSubnet(quantumv20.UpdateCommand):
     """Update subnet's information."""
 
     resource = 'subnet'

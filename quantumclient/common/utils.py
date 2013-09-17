@@ -27,12 +27,13 @@ import os
 import sys
 
 from quantumclient.common import exceptions
+from quantumclient.openstack.common import strutils
 
 
 def env(*vars, **kwargs):
-    """
-    returns the first environment variable set
-    if none are non-empty, defaults to '' or keyword arg default
+    """Returns the first environment variable set.
+
+    if none are non-empty, defaults to '' or keyword arg default.
     """
     for v in vars:
         value = os.environ.get(v)
@@ -75,7 +76,7 @@ def loads(s):
 
 
 def import_class(import_str):
-    """Returns a class from a string including module and class
+    """Returns a class from a string including module and class.
 
     :param import_str: a string representation of the class name
     :rtype: the requested class
@@ -140,7 +141,10 @@ def str2bool(strbool):
 
 
 def str2dict(strdict):
-        '''@param strdict: key1=value1,key2=value2'''
+        '''Convert key1=value1,key2=value2,... string into dictionary.
+
+        :param strdict: key1=value1,key2=value2
+        '''
         _info = {}
         for kv_str in strdict.split(","):
             k, v = kv_str.split("=", 1)
@@ -148,23 +152,49 @@ def str2dict(strdict):
         return _info
 
 
-def http_log(_logger, args, kwargs, resp, body):
-        if not _logger.isEnabledFor(logging.DEBUG):
-            return
+def http_log_req(_logger, args, kwargs):
+    if not _logger.isEnabledFor(logging.DEBUG):
+        return
 
-        string_parts = ['curl -i']
-        for element in args:
-            if element in ('GET', 'POST'):
-                string_parts.append(' -X %s' % element)
-            else:
-                string_parts.append(' %s' % element)
+    string_parts = ['curl -i']
+    for element in args:
+        if element in ('GET', 'POST', 'DELETE', 'PUT'):
+            string_parts.append(' -X %s' % element)
+        else:
+            string_parts.append(' %s' % element)
 
-        for element in kwargs['headers']:
-            header = ' -H "%s: %s"' % (element, kwargs['headers'][element])
-            string_parts.append(header)
+    for element in kwargs['headers']:
+        header = ' -H "%s: %s"' % (element, kwargs['headers'][element])
+        string_parts.append(header)
 
-        _logger.debug("REQ: %s\n" % "".join(string_parts))
-        if 'body' in kwargs and kwargs['body']:
-            _logger.debug("REQ BODY: %s\n" % (kwargs['body']))
-        _logger.debug("RESP:%s\n", resp)
-        _logger.debug("RESP BODY:%s\n", body)
+    if 'body' in kwargs and kwargs['body']:
+        string_parts.append(" -d '%s'" % (kwargs['body']))
+    string_parts = safe_encode_list(string_parts)
+    _logger.debug("\nREQ: %s\n" % "".join(string_parts))
+
+
+def http_log_resp(_logger, resp, body):
+    if not _logger.isEnabledFor(logging.DEBUG):
+        return
+    _logger.debug("RESP:%s %s\n", resp, body)
+
+
+def _safe_encode_without_obj(data):
+    if isinstance(data, basestring):
+        return strutils.safe_encode(data)
+    return data
+
+
+def safe_encode_list(data):
+    return map(_safe_encode_without_obj, data)
+
+
+def safe_encode_dict(data):
+    def _encode_item((k, v)):
+        if isinstance(v, list):
+            return (k, safe_encode_list(v))
+        elif isinstance(v, dict):
+            return (k, safe_encode_dict(v))
+        return (k, _safe_encode_without_obj(v))
+
+    return dict(map(_encode_item, data.items()))

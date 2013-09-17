@@ -18,27 +18,25 @@
 import uuid
 
 import mox
-from mox import ContainsKeyValue
-import unittest
+import testtools
 
 from quantumclient.common import exceptions
 from quantumclient.quantum import v2_0 as quantumv20
-from quantumclient.tests.unit import test_cli20
-from quantumclient.v2_0.client import Client
+from quantumclient.v2_0 import client
+from tests.unit import test_cli20
 
 
-class CLITestNameorID(unittest.TestCase):
+class CLITestNameorID(testtools.TestCase):
 
     def setUp(self):
-        """Prepare the test environment"""
+        """Prepare the test environment."""
+        super(CLITestNameorID, self).setUp()
         self.mox = mox.Mox()
         self.endurl = test_cli20.ENDURL
-        self.client = Client(token=test_cli20.TOKEN, endpoint_url=self.endurl)
-
-    def tearDown(self):
-        """Clear the test environment"""
-        self.mox.VerifyAll()
-        self.mox.UnsetStubs()
+        self.client = client.Client(token=test_cli20.TOKEN,
+                                    endpoint_url=self.endurl)
+        self.addCleanup(self.mox.VerifyAll)
+        self.addCleanup(self.mox.UnsetStubs)
 
     def test_get_id_from_id(self):
         _id = str(uuid.uuid4())
@@ -49,9 +47,8 @@ class CLITestNameorID(unittest.TestCase):
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&id=" + _id), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr))
         self.mox.ReplayAll()
         returned_id = quantumv20.find_resourceid_by_name_or_id(
             self.client, 'network', _id)
@@ -67,15 +64,13 @@ class CLITestNameorID(unittest.TestCase):
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&id=" + _id), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr1))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr1))
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&name=" + _id), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr))
         self.mox.ReplayAll()
         returned_id = quantumv20.find_resourceid_by_name_or_id(
             self.client, 'network', _id)
@@ -91,9 +86,8 @@ class CLITestNameorID(unittest.TestCase):
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&name=" + name), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr))
         self.mox.ReplayAll()
         returned_id = quantumv20.find_resourceid_by_name_or_id(
             self.client, 'network', name)
@@ -109,9 +103,8 @@ class CLITestNameorID(unittest.TestCase):
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&name=" + name), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr))
         self.mox.ReplayAll()
         try:
             quantumv20.find_resourceid_by_name_or_id(
@@ -128,9 +121,8 @@ class CLITestNameorID(unittest.TestCase):
         self.client.httpclient.request(
             test_cli20.end_url(path, "fields=id&name=" + name), 'GET',
             body=None,
-            headers=ContainsKeyValue('X-Auth-Token',
-                                     test_cli20.TOKEN)).AndReturn(
-                                         (test_cli20.MyResp(200), resstr))
+            headers=mox.ContainsKeyValue('X-Auth-Token', test_cli20.TOKEN)
+        ).AndReturn((test_cli20.MyResp(200), resstr))
         self.mox.ReplayAll()
         try:
             quantumv20.find_resourceid_by_name_or_id(
