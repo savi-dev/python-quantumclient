@@ -170,10 +170,12 @@ class HTTPClient(httplib2.Http):
             return kwargs
 
     def authenticate_and_fetch_endpoint_url(self):
-        if not self.auth_token:
+        if not self.endpoint_url:
             self.authenticate()
-        elif not self.endpoint_url:
-            self.endpoint_url = self._get_endpoint_url()
+        #if not self.auth_token:
+        #    self.authenticate()
+        #elif not self.endpoint_url:
+        #    self.endpoint_url = self._get_endpoint_url()
 
     def do_request(self, url, method, **kwargs):
         self.authenticate_and_fetch_endpoint_url()
@@ -181,18 +183,20 @@ class HTTPClient(httplib2.Http):
         # might be because the auth token expired, so try to
         # re-authenticate and try again. If it still fails, bail.
         try:
-            kwargs.setdefault('headers', {})
-            kwargs['headers']['X-Auth-Token'] = self.auth_token
+            if self.auth_token:
+               kwargs.setdefault('headers', {})
+               kwargs['headers']['X-Auth-Token'] = self.auth_token
             resp, body = self._cs_request(self.endpoint_url + url, method,
                                           **kwargs)
             return resp, body
-        except exceptions.Unauthorized:
-            self.authenticate()
-            kwargs.setdefault('headers', {})
-            kwargs['headers']['X-Auth-Token'] = self.auth_token
-            resp, body = self._cs_request(
-                self.endpoint_url + url, method, **kwargs)
-            return resp, body
+        except exceptions.Unauthorized as ex:
+            if not self.endpoint_url:
+               self.authenticate()
+               resp, body = self._cs_request(
+                   self.endpoint_url + url, method, **kwargs)
+               return resp, body
+            else:
+               raise ex
 
     def _extract_service_catalog(self, body):
         """Set the client's service catalog from the response data."""
